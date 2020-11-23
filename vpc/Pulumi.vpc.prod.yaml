@@ -1,0 +1,4 @@
+secretsprovider: awskms://alias/pulumi-encryption?region=eu-west-1
+encryptedkey: AQICAHhMTMfjmJhIuU3QtvDjXWVcnQ2phBTgcDky61+JB0rcrgEtaDpoaPjczQ2/PUw2rcnwAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMGR7zlEqH3tQO+UaBAgEQgDu5pugzIK29E2GLe+gyybeVJn9MFKLHldO6n6wPPEDpUl3oa1zmvgm+N4Sl1F9JBiCmimS7xE5dtzKG9g==
+config:
+  aws:region: eu-west-1
