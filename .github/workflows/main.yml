@@ -7,7 +7,7 @@ on:
       - main
 jobs:
   deploy:
-    name: Deploy
+    name: Deploy VPC
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,5 +21,11 @@ jobs:
           role-to-assume: ContinuousDelivery
           role-external-id: ${{ secrets.EXTERNAL_ID }}
           role-duration-seconds: 900
-      - name: Check
-        run: aws sts get-caller-identity
+      - name: Install Pulumi CLI
+        uses: pulumi/action-install-pulumi-cli@77e8e5bff08d521f1106135f1c4202d0c0d5eec1
+      - name: Pulumi login
+        run: |
+          pulumi login s3://pulumi-state-f365
+      - name: Pulumi up
+        run: |
+          pulumi up -C vpc --expect-no-changes
