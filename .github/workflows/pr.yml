@@ -1,14 +1,14 @@
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
 jobs:
-  deploy:
+  vpc:
     name: Deploy VPC
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vpc
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -23,9 +23,15 @@ jobs:
           role-duration-seconds: 900
       - name: Install Pulumi CLI
         uses: pulumi/action-install-pulumi-cli@77e8e5bff08d521f1106135f1c4202d0c0d5eec1
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '14'
+      - name: Install deps
+        run: |
+          npm i
       - name: Pulumi login
         run: |
           pulumi login s3://pulumi-state-f365
-      - name: Pulumi up
+      - name: Run Pulumi
         run: |
-          pulumi up --yes -C vpc --expect-no-changes -s vpc.prod
+          pulumi preview -s vpc.prod
