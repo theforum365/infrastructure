@@ -1,5 +1,5 @@
 on:
-  push:
+  pull_request:
     branches:
       - main
 jobs:
@@ -31,7 +31,7 @@ jobs:
           npm i
       - name: Run Pulumi
         run: |
-          ../scripts/run_pulumi.sh up -y -s vpc.prod
+          ../scripts/run_pulumi.sh preview -s vpc.prod
         env:
           COMMENT_ON_PR: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
