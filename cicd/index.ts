@@ -92,7 +92,7 @@ const continuousDeliveryPolicy = new aws.iam.Policy("cd-cd-policy", {
     })
 }, { parent: continuousDeliveryRole})
 
-const pulumiUser = new aws.iam.User("pulumi", {})
+const pulumiUser = new aws.iam.User("pulumi")
 
 const pulumiUserPolicy = new aws.iam.Policy("pulumi", {
     policy: continuousDeliveryRole.arn.apply(arn => JSON.stringify({
@@ -109,8 +109,8 @@ const pulumiUserPolicy = new aws.iam.Policy("pulumi", {
 
 })
 
-const foo = new aws.iam.UserPolicyAttachment("pulumi", {
+const attachment = new aws.iam.UserPolicyAttachment("pulumi", {
     policyArn: pulumiUserPolicy.arn,
     user: pulumiUser.name
-})
+}, { parent: pulumiUserPolicy })
 
