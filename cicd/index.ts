@@ -38,7 +38,7 @@ const continuousDeliveryRole = new aws.iam.Role("ci-cd-role", {
     },
 })
 
-const continuousDeliveryPolicy = new aws.iam.Policy("cd-cd-policy", {
+const continuousDeliveryPolicy = new aws.iam.Policy("ci-cd-policy", {
     description: "Access for CI/CD tools",
     policy: JSON.stringify({
         Version: "2012-10-17",
@@ -91,6 +91,11 @@ const continuousDeliveryPolicy = new aws.iam.Policy("cd-cd-policy", {
         ],
     })
 }, { parent: continuousDeliveryRole})
+
+const continuousDeliveryPolicyAttachment = new aws.iam.PolicyAttachment("ci-cd-policyattachment", {
+    policyArn: continuousDeliveryPolicy.arn,
+    roles: [ continuousDeliveryRole.name ],
+})
 
 const pulumiUser = new aws.iam.User("pulumi")
 
