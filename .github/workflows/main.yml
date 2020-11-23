@@ -31,7 +31,7 @@ jobs:
           npm i
       - name: Run Pulumi
         run: |
-          ../scripts/run_pulumi.sh up -y -s vpc.prod --suppress-permanlink
+          ../scripts/run_pulumi.sh up -y -s vpc.prod --suppress-permalink
         env:
           COMMENT_ON_PR: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
