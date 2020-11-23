@@ -28,4 +28,4 @@ jobs:
           pulumi login s3://pulumi-state-f365
       - name: Pulumi up
         run: |
-          pulumi up -C vpc --expect-no-changes
+          pulumi up --yes -C vpc --expect-no-changes
