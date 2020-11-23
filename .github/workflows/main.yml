@@ -20,5 +20,6 @@ jobs:
           aws-region: eu-west-1
           role-to-assume: ContinuousDelivery
           role-external-id: ${{ secrets.EXTERNAL_ID }}
+          role-duration-seconds: 720
       - name: Check
         run: aws sts get-caller-identity
