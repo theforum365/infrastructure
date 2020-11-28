@@ -1,7 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from 'fs';
+import axios from "axios";
 
+const config = new pulumi.Config()
 const stackRef = new pulumi.StackReference("vpc.prod")
 const vpcId = stackRef.getOutput("vpcId")
 const vpcCidr = stackRef.getOutput("vpcCidr")
@@ -116,7 +118,7 @@ const instanceProfile = new aws.iam.InstanceProfile(`theforum365-web-instancepro
 */
 const ami = pulumi.output(aws.getAmi({
     filters: [
-        { name: "name", values: [ "forum-arm64*" ] }
+        { name: "name", values: [ "forum-web-arm64*" ] }
     ],
     owners: ["791046510159"],
     mostRecent: true
@@ -372,5 +374,40 @@ const scaleUp = new aws.autoscaling.Policy(`theforum365-scalingpolicy`, {
     }
 })
 
+/*
+  Lambda functions for the forum software
+  The forum software has "tasks" that run. You can either run them with traffic
+  as a cron job or hit an API. Because we have multiple instances, we don't
+  want to run them as a cron. Instead, we define a lmambda function that runs once a minute, and get the url from the admin panel
+*/
+
+const host = config.require("host")
+const key = config.require("taskKey")
+
+let url = `https://${host}/applications/core/interface/task/web.php?key=${key}`
+
+const runTasks: aws.cloudwatch.EventRuleEventHandler = async (
+    event: aws.cloudwatch.EventRuleEvent,
+) => {
+    console.log('getting url')
+    await getTaskUrl(url)
+    console.log('exiting...')
+};
+
+const runTasksSchedule: aws.cloudwatch.EventRuleEventSubscription = aws.cloudwatch.onSchedule(
+    "runTasks",
+    "rate(1 minute)",
+    runTasks,
+);
+
+async function getTaskUrl(url: string) {
+    try {
+        const response = await axios.get(url);
+        console.log(response);
+    } catch (error) {
+        console.error(error);
+        throw(error)
+    }
+}
 
 

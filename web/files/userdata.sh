@@ -13,6 +13,10 @@ ASG_NAME=$(aws ec2 describe-instances --instance-id $(curl -s http://169.254.169
 aws s3 sync s3://theforum365-software/4.4.10 /srv/http/theforum365.com/root/html/ --sse
 chown -R nginx:nginx /srv/http/theforum365.com
 
+# create template path
+mkdir -p /srv/http/theforum365.com/root/html/uploads/templates
+chown nginx:nginx /srv/http/theforum365.com/root/html/uploads/templates
+
 # Check if nginx comes up
 printf "Waiting for nginx to be ready"
 until $(curl -k --output /dev/null --silent --head --fail --max-time 2 ${HEALTHCHECK_URI}); do
