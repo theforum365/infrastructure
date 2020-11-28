@@ -309,6 +309,14 @@ const cfnTemplate = {
                 VPCZoneIdentifier: ["subnet-063b03d0df0666b38"],
                 MaxSize: 10,
                 MinSize: 1,
+                MetricsCollection: [
+                    {
+                        "Granularity":"1Minute",
+                        "Metrics":[
+                            "GroupDesiredCapacity",
+                        ],
+                    },
+                ],
                 LoadBalancerNames: [ loadbalancer.name ],
                 Cooldown: 300,
                 HealthCheckType: "ELB",
