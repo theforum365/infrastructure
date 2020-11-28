@@ -26,4 +26,5 @@ const redis = new aws.elasticache.Cluster("theforum365-cache", {
     port: 6379,
     subnetGroupName: subnet_group.name,
     availabilityZone: "eu-west-1b",
+    securityGroupIds: [ security_group.id ],
 })

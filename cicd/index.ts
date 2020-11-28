@@ -97,9 +97,9 @@ const continuousDeliveryPolicyAttachment = new aws.iam.PolicyAttachment("ci-cd-p
     roles: [ continuousDeliveryRole.name ],
 })
 
-const pulumiUser = new aws.iam.User("pulumi")
+const ghaUser = new aws.iam.User("github-actions")
 
-const pulumiUserPolicy = new aws.iam.Policy("pulumi", {
+const ghaUserPolicy = new aws.iam.Policy("github-actions", {
     policy: continuousDeliveryRole.arn.apply(arn => JSON.stringify({
         "Version": "2012-10-17",
         "Statement": [{
@@ -114,8 +114,8 @@ const pulumiUserPolicy = new aws.iam.Policy("pulumi", {
 
 })
 
-const attachment = new aws.iam.UserPolicyAttachment("pulumi", {
-    policyArn: pulumiUserPolicy.arn,
-    user: pulumiUser.name
-}, { parent: pulumiUserPolicy })
+const attachment = new aws.iam.UserPolicyAttachment("github-actions", {
+    policyArn: ghaUserPolicy.arn,
+    user: ghaUser.name
+}, { parent: ghaUserPolicy })
 
