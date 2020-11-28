@@ -1,0 +1,8 @@
+secretsprovider: awskms://alias/pulumi-encryption?region=eu-west-1
+encryptedkey: AQICAHhMTMfjmJhIuU3QtvDjXWVcnQ2phBTgcDky61+JB0rcrgHOGTPQ0aCntY/t9RtXxHrAAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMiaiWE4ipdlmNHmfgAgEQgDtgyd4zWH5H4QJNHicXvSxgjSwfoxAJQazzhFtPQ28olQc/stCV0ZuTRdDZkCM69OqujDtvrV/6jXYv5g==
+config:
+  aws:region: eu-west-1
+  cicd:accountId:
+    secure: v1:nYcwAoovI+Zm4mKh:t76RUdmQZbN8WpG3QGKJijtUPxf2oblVUWYkQg==
+  cicd:externalId:
+    secure: v1:2wXhtSyp8mS3rHA2:YVPbv/fiaWh8Fn1h1bDmYI9KP5g7lygaIuKAjMF9
