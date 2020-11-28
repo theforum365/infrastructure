@@ -7,19 +7,28 @@ const vpcId = stackRef.getOutput("vpcId")
 const vpcCidr = stackRef.getOutput("vpcCidr")
 const privateSubnets = stackRef.getOutput("privateSubnets")
 
-// Create IAM properties for ASG to function correctly
-// create an IAM role
+/*
+  Create IAM properties for ASG to function correctly
+*/
 const iamRole = new aws.iam.Role(`theforum365-web-role`, {
     assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
         Service: "ec2.amazonaws.com",
     }),
 })
 
+/*
+  These managed policies are attached to the EC2 instances so they can do what they need to do
+  FIXME: do we really need EC2 full access here?
+*/
 const managedPolicyArns: string[] = [
     'arn:aws:iam::aws:policy/AmazonEC2FullAccess',
     'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
 ]
 
+/*
+  Loop through the managed policies and attach
+  them to the defined IAM role
+*/
 let counter = 0;
 for (const policy of managedPolicyArns) {
     // Create RolePolicyAttachment without returning it.
@@ -27,6 +36,11 @@ for (const policy of managedPolicyArns) {
         { policyArn: policy, role: iamRole.id }, { parent: iamRole}
     );
 }
+
+/*
+  Define some custom policies for the role. This allows access to cloudwatch
+  for adding metric data and logs
+*/
 
 const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-cloudwatch-rp`, {
     role: iamRole.id,
@@ -49,6 +63,12 @@ const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-cloudwatch-rp`, {
     },
 });
 
+/*
+  This allows the ec2 instances access to the software bucket
+  This is used on EC2 startup to download the forum software
+  FIXME: we also need to allow access to the cdn bucket
+*/
+
 const s3SoftwarePolicy = new aws.iam.RolePolicy('theforum365-s3-rp', {
     role: iamRole.id,
     policy: {
@@ -65,6 +85,9 @@ const s3SoftwarePolicy = new aws.iam.RolePolicy('theforum365-s3-rp', {
     }
 })
 
+/*
+  The role for SSM, which allows the instances to register in SSM
+*/
 const ssmRolePolicy = new aws.iam.RolePolicy("theforum365-ssm-rp", {
     role: iamRole.id,
     policy: {
@@ -79,10 +102,18 @@ const ssmRolePolicy = new aws.iam.RolePolicy("theforum365-ssm-rp", {
     },
 });
 
+/*
+  This is the instance profile that gets assigned to the role
+*/
+
 const instanceProfile = new aws.iam.InstanceProfile(`theforum365-web-instanceprofile`, {
     role: iamRole.name
 })
 
+/*
+  This grabs the AMI asynchronously so we can use it to pass to the launchtemplate etc
+  Thw AMI is built here: https://github.com/theforum365/ami
+*/
 const ami = pulumi.output(aws.getAmi({
     filters: [
         { name: "name", values: [ "forum-arm64*" ] }
@@ -90,6 +121,12 @@ const ami = pulumi.output(aws.getAmi({
     owners: ["791046510159"],
     mostRecent: true
 }))
+
+/*
+  Define a security group for the ec2 instances.
+  We allow egress all, and we also allow access to all ports from within the VPC subnet
+  We notably don't allow SSH access, because we use AWS SSM for that instead
+*/
 
 const instanceSecurityGroups = new aws.ec2.SecurityGroup(`theforum365-instance-securitygroup`, {
     vpcId: vpcId,
@@ -108,15 +145,16 @@ const instanceSecurityGroups = new aws.ec2.SecurityGroup(`theforum365-instance-s
     }]
 })
 
-// launch data
 /*
-let userData = Buffer.from(`}`).toString('base64');
+  This defines the userdata for the instances on startup.
+  We read the file async, and then convert to a Base64 string because it's clean in the metadata
 */
-
 let userDataRaw = fs.readFileSync('./files/userdata.sh')
 let userData = Buffer.from(userDataRaw).toString('base64')
 
-// create a launch template with the values for our instances
+/*
+  This is the launch template for the instances
+*/
 const launchTemplate = new aws.ec2.LaunchTemplate(`theforum365-web-launchtemplate`, {
     imageId: ami.id,
     instanceType: "t4g.medium",
@@ -144,6 +182,9 @@ const launchTemplate = new aws.ec2.LaunchTemplate(`theforum365-web-launchtemplat
     userData: userData
 })
 
+/*
+  List of Cloudflare IPs to pass to the loadbalancer security group
+*/
 let cloudflareIPv4: string[] = [
     "173.245.48.0/20",
     "103.21.244.0/22",
@@ -171,6 +212,11 @@ let cloudflareIPv6: string[] = [
     "2c0f:f248::/32",
 ]
 
+/*
+  Define a security group for the loadbalancer
+  We only allow access from the cloudflare IP ranges because nobody should be hitting the loadbalancer directly
+  This saves us money and stops the spambots
+*/
 const webSecurityGroup = new aws.ec2.SecurityGroup(`theforum365-web-securitygroup`, {
     vpcId: vpcId,
     description: "Allow all web traffic",
@@ -197,6 +243,9 @@ const webSecurityGroup = new aws.ec2.SecurityGroup(`theforum365-web-securitygrou
     }]
 })
 
+/*
+  The loadbalancer for the instances.
+*/
 const loadbalancer = new aws.elb.LoadBalancer("theforum365-web", {
     listeners: [
         {
@@ -219,15 +268,26 @@ const loadbalancer = new aws.elb.LoadBalancer("theforum365-web", {
         healthyThreshold: 2,
         unhealthyThreshold: 2,
         timeout: 10,
-        target: "TCP:80",
+        target: "TCP:80", // We should try use a HTTP check rather than TCP here
         interval: 30,
     }})
 
+/*
+  Enable proxy protocol on the load balancer
+  This allows us to get the real IP address of the requests in the nginx access logs
+*/
 const proxyProtocol = new aws.ec2.ProxyProtocolPolicy("theforum365-web", {
     loadBalancer: loadbalancer.name,
     instancePorts: [ "80", "443" ]
 })
 
+/*
+  We define a cloudformation template for the autoscaling group.
+  The only reason we do this is because CFN allows rolling updates of the ASG when we
+  make changes to the AMI. If the instance refresh API is ever merged, we should remove this.
+  NOTE: this is just a standard map, so we need to use an output when we references this
+  as we have a bunch of outputs in here
+*/
 const cfnTemplate = {
     AWSTemplateFormatVersion: '2010-09-09',
     Description: 'Main ASG for the forum',
@@ -285,12 +345,20 @@ const cfnTemplate = {
     }
 }
 
+/*
+  Create the cloudformation stack for the autoscaling group
+  As mentioned above, we take the above JSON map, stringify it and then run it through
+  an output so we can resolve the promise references above
+*/
 const cfnAutoScalingGroup = new aws.cloudformation.Stack(`theforum365-web-cfn`, {
     templateBody: pulumi.output(cfnTemplate).apply(JSON.stringify)
 }, { dependsOn: [ launchTemplate ] } )
 
 /*
- Create an autoscaling policy, which will scale the capacity up by 1 server
+  A target tracking autoscaling policy
+   We have to reference the stackouput.
+   We check the CPU util of the instances in the ASG, if it hits 85%
+   we scale up
  */
 const scaleUp = new aws.autoscaling.Policy(`theforum365-scalingpolicy`, {
     autoscalingGroupName: cfnAutoScalingGroup.outputs.apply(x => x["AsgName"]),
