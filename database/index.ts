@@ -13,7 +13,7 @@ const adminUsers = config.requireObject<string[]>("adminUsers")
 const stackRef = new pulumi.StackReference("vpc.prod")
 const vpcId = stackRef.getOutput("vpcId")
 const vpcCidr = stackRef.getOutput("vpcCidr")
-const privateSubnets = stackRef.getOutput("privateSubnets")
+const privateSubnets = stackRef.getOutput("privateSubnetIds")
 
 /*
   Define a SubnetGroup with the private subnets
@@ -51,11 +51,12 @@ const securityGroup = new aws.ec2.SecurityGroup("theforum365-db", {
 */
 
 const adminPassword = new random.RandomPassword("theforum365-admin-password", {
-    length: 14
+    length: 14,
+    special: false,
 })
 
 const db = new aws.rds.Instance("theforum365", {
-    instanceClass: "db.m6g.large",
+    instanceClass: "db.t3.medium",
     allocatedStorage: 100,
     storageType: "gp2",
     maxAllocatedStorage: 200,
@@ -63,7 +64,7 @@ const db = new aws.rds.Instance("theforum365", {
     engine: "mysql",
     engineVersion: "8.0.21",
     multiAz: false,
-    availabilityZone: "eu-west-1a",
+    availabilityZone: "eu-west-1b",
     backupRetentionPeriod: 1,
     backupWindow: "01:00-02:00",
     copyTagsToSnapshot: true,
@@ -71,6 +72,7 @@ const db = new aws.rds.Instance("theforum365", {
     deletionProtection: true,
     maintenanceWindow: "Mon:02:00-Mon:05:00",
     finalSnapshotIdentifier: "theforum365-final",
+    skipFinalSnapshot: true,
     vpcSecurityGroupIds: [securityGroup.id],
     tags: {
         "tier": "production",

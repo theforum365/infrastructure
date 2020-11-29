@@ -4,19 +4,21 @@ import * as fs from 'fs';
 import axios from "axios";
 
 const config = new pulumi.Config()
+const stackName = pulumi.getStack()
 const stackRef = new pulumi.StackReference("vpc.prod")
 const vpcId = stackRef.getOutput("vpcId")
 const vpcCidr = stackRef.getOutput("vpcCidr")
-const privateSubnets = stackRef.getOutput("privateSubnets")
+
+let stack = stackName.split(".")
 
 /*
   Create IAM properties for ASG to function correctly
 */
-const iamRole = new aws.iam.Role(`theforum365-web-role`, {
+const iamRole = new aws.iam.Role(`theforum365-${stack[1]}-web-role`, {
     assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
         Service: "ec2.amazonaws.com",
     }),
-})
+}, { aliases: [{  name: "theforum365-web-role" }]})
 
 /*
   These managed policies are attached to the EC2 instances so they can do what they need to do
@@ -34,8 +36,8 @@ const managedPolicyArns: string[] = [
 let counter = 0;
 for (const policy of managedPolicyArns) {
     // Create RolePolicyAttachment without returning it.
-    const rpa = new aws.iam.RolePolicyAttachment(`$theforum365-policy-${counter++}`,
-        { policyArn: policy, role: iamRole.id }, { parent: iamRole}
+    const rpa = new aws.iam.RolePolicyAttachment(`theforum365-policy-${stack[1]}-${counter++}`,
+        { policyArn: policy, role: iamRole.id }, { parent: iamRole }
     );
 }
 
@@ -44,7 +46,7 @@ for (const policy of managedPolicyArns) {
   for adding metric data and logs
 */
 
-const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-cloudwatch-rp`, {
+const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-${stack[1]}-cloudwatch-rp`, {
     role: iamRole.id,
     policy: {
         Version: "2012-10-17",
@@ -63,7 +65,7 @@ const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-cloudwatch-rp`, {
             Resource: "*",
         }],
     },
-});
+}, { aliases: [ { name: "theforum365-cloudwatch-rp" }] });
 
 /*
   This allows the ec2 instances access to the software bucket
@@ -71,7 +73,7 @@ const cloudwatchPolicy = new aws.iam.RolePolicy(`theforum365-cloudwatch-rp`, {
   FIXME: we also need to allow access to the cdn bucket
 */
 
-const s3SoftwarePolicy = new aws.iam.RolePolicy('theforum365-s3-rp', {
+const s3SoftwarePolicy = new aws.iam.RolePolicy(`theforum365-${stack[1]}-s3-rp`, {
     role: iamRole.id,
     policy: {
         Version: "2012-10-17",
@@ -85,12 +87,12 @@ const s3SoftwarePolicy = new aws.iam.RolePolicy('theforum365-s3-rp', {
             Resource: [ "arn:aws:s3:::theforum365-software/*"],
         }],
     }
-})
+}, {aliases: [ { name: "theforum365-s3-rp" } ]})
 
 /*
   The role for SSM, which allows the instances to register in SSM
 */
-const ssmRolePolicy = new aws.iam.RolePolicy("theforum365-ssm-rp", {
+const ssmRolePolicy = new aws.iam.RolePolicy(`theforum365-${stack[1]}-ssm-rp`, {
     role: iamRole.id,
     policy: {
         Version: "2012-10-17",
@@ -102,15 +104,15 @@ const ssmRolePolicy = new aws.iam.RolePolicy("theforum365-ssm-rp", {
             Resource: "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-* ",
         }],
     },
-});
+}, {aliases: [ { name: "theforum365-ssm-rp"} ]});
 
 /*
   This is the instance profile that gets assigned to the role
 */
 
-const instanceProfile = new aws.iam.InstanceProfile(`theforum365-web-instanceprofile`, {
+const instanceProfile = new aws.iam.InstanceProfile(`theforum365-${stack[1]}-web-instanceprofile`, {
     role: iamRole.name
-})
+}, {aliases: [ { name: "theforum365-web-instanceprofile"} ]})
 
 /*
   This grabs the AMI asynchronously so we can use it to pass to the launchtemplate etc
@@ -130,7 +132,7 @@ const ami = pulumi.output(aws.getAmi({
   We notably don't allow SSH access, because we use AWS SSM for that instead
 */
 
-const instanceSecurityGroups = new aws.ec2.SecurityGroup(`theforum365-instance-securitygroup`, {
+const instanceSecurityGroups = new aws.ec2.SecurityGroup(`theforum365-${stack[1]}-instance-securitygroup`, {
     vpcId: vpcId,
     description: "Allow all ports from same subnet",
     ingress: [{
@@ -145,7 +147,7 @@ const instanceSecurityGroups = new aws.ec2.SecurityGroup(`theforum365-instance-s
         toPort: 0,
         cidrBlocks: ['0.0.0.0/0'],
     }]
-})
+}, {aliases: [ { name: "theforum365-instance-securitygroup"} ]})
 
 /*
   This defines the userdata for the instances on startup.
@@ -157,7 +159,7 @@ let userData = Buffer.from(userDataRaw).toString('base64')
 /*
   This is the launch template for the instances
 */
-const launchTemplate = new aws.ec2.LaunchTemplate(`theforum365-web-launchtemplate`, {
+const launchTemplate = new aws.ec2.LaunchTemplate(`theforum365-${stack[1]}-web-launchtemplate`, {
     imageId: ami.id,
     instanceType: "t4g.medium",
     namePrefix: "theforum365",
@@ -182,7 +184,7 @@ const launchTemplate = new aws.ec2.LaunchTemplate(`theforum365-web-launchtemplat
         }
     }],
     userData: userData
-})
+}, {aliases: [ { name: "theforum365-web-launchtemplate"} ]})
 
 /*
   List of Cloudflare IPs to pass to the loadbalancer security group
@@ -219,7 +221,7 @@ let cloudflareIPv6: string[] = [
   We only allow access from the cloudflare IP ranges because nobody should be hitting the loadbalancer directly
   This saves us money and stops the spambots
 */
-const webSecurityGroup = new aws.ec2.SecurityGroup(`theforum365-web-securitygroup`, {
+const webSecurityGroup = new aws.ec2.SecurityGroup(`theforum365-${stack[1]}-web-securitygroup`, {
     vpcId: vpcId,
     description: "Allow all web traffic",
     ingress: [{
@@ -243,12 +245,12 @@ const webSecurityGroup = new aws.ec2.SecurityGroup(`theforum365-web-securitygrou
         toPort: 0,
         cidrBlocks: ['0.0.0.0/0'],
     }]
-})
+}, {aliases: [ { name: "theforum365-web-securitygroup"} ]})
 
 /*
   The loadbalancer for the instances.
 */
-const loadbalancer = new aws.elb.LoadBalancer("theforum365-web", {
+const loadbalancer = new aws.elb.LoadBalancer(`theforum365-${stack[1]}-web-lb`, {
     listeners: [
         {
             instancePort: 80,
@@ -266,22 +268,24 @@ const loadbalancer = new aws.elb.LoadBalancer("theforum365-web", {
     ],
     securityGroups: [ webSecurityGroup.id ],
     subnets: [ "subnet-063b03d0df0666b38" ], // FIXME: reference this, don't hardcode it
+    connectionDraining: true,
+    connectionDrainingTimeout: 300,
     healthCheck: {
         healthyThreshold: 2,
         unhealthyThreshold: 2,
         timeout: 10,
         target: "TCP:80", // We should try use a HTTP check rather than TCP here
         interval: 30,
-    }})
+    }}, {aliases: [ { name: "theforum365-web"} ]})
 
 /*
   Enable proxy protocol on the load balancer
   This allows us to get the real IP address of the requests in the nginx access logs
 */
-const proxyProtocol = new aws.ec2.ProxyProtocolPolicy("theforum365-web", {
+const proxyProtocol = new aws.ec2.ProxyProtocolPolicy(`theforum365-${stack[1]}-web-pp`, {
     loadBalancer: loadbalancer.name,
     instancePorts: [ "80", "443" ]
-})
+}, {aliases: [ { name: "theforum365-web"} ]})
 
 /*
   We define a cloudformation template for the autoscaling group.
@@ -340,7 +344,7 @@ const cfnTemplate = {
                 }, {
                     Key: "Name",
                     PropagateAtLaunch: true,
-                    Value: "theforum365-web"
+                    Value: `theforum365-web-${stack[1]}`
                 }],
             }
         }
@@ -349,7 +353,7 @@ const cfnTemplate = {
         AsgName: {
             Description: "The name of the created autoscaling group",
             Value: {
-                Ref: "theforum365"
+                Ref: `theforum365`
             }
         }
     }
@@ -360,9 +364,9 @@ const cfnTemplate = {
   As mentioned above, we take the above JSON map, stringify it and then run it through
   an output so we can resolve the promise references above
 */
-const cfnAutoScalingGroup = new aws.cloudformation.Stack(`theforum365-web-cfn`, {
+const cfnAutoScalingGroup = new aws.cloudformation.Stack(`theforum365-${stack[1]}-web-cfn`, {
     templateBody: pulumi.output(cfnTemplate).apply(JSON.stringify)
-}, { dependsOn: [ launchTemplate ] } )
+}, { dependsOn: [ launchTemplate ], aliases: [ { name: "theforum365-web-cfn"} ]}  )
 
 /*
   A target tracking autoscaling policy
@@ -370,7 +374,7 @@ const cfnAutoScalingGroup = new aws.cloudformation.Stack(`theforum365-web-cfn`, 
    We check the CPU util of the instances in the ASG, if it hits 85%
    we scale up
  */
-const scaleUp = new aws.autoscaling.Policy(`theforum365-scalingpolicy`, {
+const scaleUp = new aws.autoscaling.Policy(`theforum365-${stack[1]}-scalingpolicy`, {
     autoscalingGroupName: cfnAutoScalingGroup.outputs.apply(x => x["AsgName"]),
     policyType: "TargetTrackingScaling",
     estimatedInstanceWarmup: 180,
@@ -380,7 +384,7 @@ const scaleUp = new aws.autoscaling.Policy(`theforum365-scalingpolicy`, {
         },
         targetValue: 85.0
     }
-})
+}, {aliases: [ { name: "theforum365-scalingpolicy"} ]} )
 
 /*
   Lambda functions for the forum software
@@ -389,32 +393,37 @@ const scaleUp = new aws.autoscaling.Policy(`theforum365-scalingpolicy`, {
   want to run them as a cron. Instead, we define a lmambda function that runs once a minute, and get the url from the admin panel
 */
 
-const host = config.require("host")
-const key = config.require("taskKey")
+const enableTasks = config.requireBoolean("enableTasks")
 
-let url = `https://${host}/applications/core/interface/task/web.php?key=${key}`
 
-const runTasks: aws.cloudwatch.EventRuleEventHandler = async (
-    event: aws.cloudwatch.EventRuleEvent,
-) => {
-    console.log('getting url')
-    await getTaskUrl(url)
-    console.log('exiting...')
-};
+if (enableTasks) {
+    const host = config.require("host")
+    const key = config.require("taskKey")
 
-const runTasksSchedule: aws.cloudwatch.EventRuleEventSubscription = aws.cloudwatch.onSchedule(
-    "runTasks",
-    "rate(1 minute)",
-    runTasks,
-);
+    let url = `https://${host}/applications/core/interface/task/web.php?key=${key}`
 
-async function getTaskUrl(url: string) {
-    try {
-        const response = await axios.get(url);
-        console.log(response);
-    } catch (error) {
-        console.error(error);
-        throw(error)
+    const runTasks: aws.cloudwatch.EventRuleEventHandler = async (
+        event: aws.cloudwatch.EventRuleEvent,
+    ) => {
+        console.log('getting url')
+        await getTaskUrl(url)
+        console.log('exiting...')
+    };
+
+    const runTasksSchedule: aws.cloudwatch.EventRuleEventSubscription = aws.cloudwatch.onSchedule(
+        `runTasks-${stack[1]}`,
+        "rate(1 minute)",
+        runTasks,
+    );
+
+    async function getTaskUrl(url: string) {
+        try {
+            const response = await axios.get(url);
+            console.log(response);
+        } catch (error) {
+            console.error(error);
+            throw(error)
+        }
     }
 }
 
