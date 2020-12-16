@@ -56,10 +56,10 @@ const adminPassword = new random.RandomPassword("theforum365-admin-password", {
 })
 
 const db = new aws.rds.Instance("theforum365", {
-    instanceClass: "db.t3.medium",
-    allocatedStorage: 100,
+    instanceClass: "db.t3.large",
+    allocatedStorage: 200,
     storageType: "gp2",
-    maxAllocatedStorage: 200,
+    maxAllocatedStorage: 300,
     dbSubnetGroupName: dbSubnetGroup.name,
     engine: "mysql",
     engineVersion: "8.0.21",
