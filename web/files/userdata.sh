@@ -10,7 +10,7 @@ ASG_NAME=$(aws ec2 describe-instances --instance-id $(curl -s http://169.254.169
 # This installs the forum software
 # FIXME: fix the harcoding here, we should be able to retrieve the software version
 # from a variable
-aws s3 sync s3://theforum365-software/4.4.10 /srv/http/theforum365.com/root/html/ --sse
+aws s3 sync s3://theforum365-software/4.5.4.2/ /srv/http/theforum365.com/root/html/ --sse
 chown -R nginx:nginx /srv/http/theforum365.com
 
 # create template path
